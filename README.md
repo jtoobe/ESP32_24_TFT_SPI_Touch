@@ -1,5 +1,7 @@
 Recopilacion de ejemplos para el uso con ESP32 de una pantalla 2.4" TFT SPI 
 
+Esta pantalla tiene 16M de colores y tiene capacidades touch.
+
 En el archivo .txt hay varios ejemplos de el uso de la pantalla con la libreria
 TFT_eSPI
 
