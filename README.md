@@ -1,4 +1,5 @@
 Recopilacion de ejemplos para el uso con ESP32 de una pantalla 2.4" TFT SPI 
+
 En el archivo .txt hay varios ejemplos de el uso de la pantalla con la libreria
 TFT_eSPI
 
@@ -10,3 +11,5 @@ a este como sigue:
 Para las conexiones seguir la imagen adjunta.
 
 La libreria incluye varios ejemplos de uso
+
+( https://github.com/Bodmer/TFT_eSPI )
