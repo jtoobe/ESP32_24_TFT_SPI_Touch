@@ -13,3 +13,9 @@ Para las conexiones seguir la imagen adjunta.
 La libreria incluye varios ejemplos de uso
 
 ( https://github.com/Bodmer/TFT_eSPI )
+
+*******************************************************************************************************
+
+Un desarrollo interesante es una GUI para diseñar las pantallas y su libreria
+
+https://github.com/ImpulseAdventure/GUIslice/wiki
