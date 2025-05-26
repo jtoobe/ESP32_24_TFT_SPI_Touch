@@ -1,0 +1,692 @@
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 01_Displaying_Text_and_Drawing_Shapes
+//---------------------------------------- Including Libraries.
+#include <TFT_eSPI.h>
+#include <SPI.h>
+//---------------------------------------- 
+
+// Invoke custom library.
+TFT_eSPI tft = TFT_eSPI();
+
+
+
+//________________________________________________________________________________ VOID SETUP()
+void setup() {
+  // put your setup code here, to run once:
+
+  tft.init();
+}
+//________________________________________________________________________________ 
+
+
+
+//________________________________________________________________________________ VOID LOOP()
+void loop() {
+  // put your main code here, to run repeatedly:
+
+  for (byte i = 0; i < 4; i++) {
+    tft.setRotation(i);  //--> Range from 0 to 3.
+
+    // Clear the screen to defined colour.
+    // To see the list of colors, open the file "TFT_eSPI.h" (Arduino IDE library folder -> TFT_eSPI -> TFT_eSPI.h).
+    // Look at "Section 6" (on line 302).
+    tft.fillScreen(TFT_WHITE);
+  
+    tft.setCursor(10, 10);
+    tft.setTextColor(TFT_BROWN); tft.setTextSize(1);
+    tft.print("LCD TFT Touchscreen");
+    tft.setCursor(9, 25);
+    tft.print("ILI9341 240*320 Pixel");
+    tft.setTextColor(TFT_GREEN); tft.setTextSize(2);
+    tft.setCursor(10, 40);
+    tft.print("with ESP32");
+    tft.setCursor(10, 60);
+    tft.print("& TFT_eSPI Library");
+    tft.setTextColor(TFT_CYAN); tft.setTextSize(2);
+    tft.setCursor(10, 85);
+    tft.print("UTEH STR");
+  
+    // Draw a filled rectangle.
+    tft.fillRect(10, 110, 20, 20, TFT_PURPLE);  //--> fillRect(x, y, w, h, color);
+  
+    // Draw a filled circle.
+    tft.fillCircle(45, 120, 10, TFT_OLIVE);  //--> fillCircle(x, y, radius, color);
+  
+    // Draw a filled triangle.
+    tft.fillTriangle(70, 110, 60, 130, 80, 130, TFT_BLUE);  //--> fillTriangle(x0, y0, x1, y1, x2, y2, color);
+
+    delay(2000);
+  }
+}
+//________________________________________________________________________________ 
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
+
+
+
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 02_Display_Images_From_SD_Card
+//##################################################################################################
+//# This sketch or program code is based on the example file "ESP32_SDcard_jpeg.ino"               #
+//# Arduino IDE (File -> Examples -> TFT_eSPI -> Generic -> ESP32_SDcard_jpeg).                    #
+//# I made a little modification of the program code "ESP32_SDcard_jpeg".                          #
+//# If this program code does not work properly, please try the original code (ESP32_SDcard_jpeg). #
+//#                                                                                                #
+//# Images on SD Card must be put in the root folder (top level) to be found.                      #
+//# Use the SD library examples to verify your SD Card interface works!                            #
+//#                                                                                                #
+//# So that your SD card can be detected or read, please format your SD card to "FAT32".           #
+//#                                                                                                #
+//# You can find the image files for this project in the "Images" folder in                        #
+//# the program code file that I shared                                                            #
+//# (the link to download it is available in the video description).                               #
+//##################################################################################################
+
+//---------------------------------------- Including Libraries.
+#include <SPI.h>
+#include <FS.h>
+#include <SD.h>
+#include <TFT_eSPI.h>
+//---------------------------------------- 
+
+int x, y;
+
+// Invoke custom library.
+TFT_eSPI tft = TFT_eSPI();
+
+// JPEG decoder library.
+#include <JPEGDecoder.h>
+
+
+
+//________________________________________________________________________________ drawSdJpeg()
+// Draw a JPEG on the TFT pulled from SD Card.
+// xpos, ypos is top left corner of plotted image.
+
+void drawSdJpeg(const char *filename, int xpos, int ypos) {
+
+  // Open the named file (the Jpeg decoder library will close it).
+  File jpegFile = SD.open( filename, FILE_READ);  // or, file handle reference for SD library.
+ 
+  if ( !jpegFile ) {
+    Serial.print("ERROR: File \""); Serial.print(filename); Serial.println ("\" not found!");
+    return;
+  }
+
+  Serial.println();
+  Serial.println("===========================");
+  Serial.print("Drawing file: "); Serial.println(filename);
+  Serial.println("===========================");
+
+  // Use one of the following methods to initialise the decoder:
+  bool decoded = JpegDec.decodeSdFile(jpegFile);  // Pass the SD file handle to the decoder,
+  //bool decoded = JpegDec.decodeSdFile(filename);  // or pass the filename (String or character array)
+
+  if (decoded) {
+    // print information about the image to the serial port.
+    jpegInfo();
+    // render the image onto the screen at given coordinates.
+    jpegRender(xpos, ypos);
+  }
+  else {
+    Serial.println("Jpeg file format not supported!");
+  }
+}
+//________________________________________________________________________________
+
+
+
+//________________________________________________________________________________ jpegRender()
+// Draw a JPEG on the TFT, images will be cropped on the right/bottom sides if they do not fit.
+//
+// This function assumes xpos,ypos is a valid screen coordinate.
+// For convenience images that do not fit totally on the screen are cropped to the nearest MCU size and may leave right/bottom borders.
+
+void jpegRender(int xpos, int ypos) {
+
+  //jpegInfo(); // Print information from the JPEG file (could comment this line out).
+
+  uint16_t *pImg;
+  uint16_t mcu_w = JpegDec.MCUWidth;
+  uint16_t mcu_h = JpegDec.MCUHeight;
+  uint32_t max_x = JpegDec.width;
+  uint32_t max_y = JpegDec.height;
+
+  bool swapBytes = tft.getSwapBytes();
+  tft.setSwapBytes(true);
+  
+  // Jpeg images are draw as a set of image block (tiles) called Minimum Coding Units (MCUs).
+  // Typically these MCUs are 16x16 pixel blocks.
+  // Determine the width and height of the right and bottom edge image blocks.
+  uint32_t min_w = jpg_min(mcu_w, max_x % mcu_w);
+  uint32_t min_h = jpg_min(mcu_h, max_y % mcu_h);
+
+  // save the current image block size.
+  uint32_t win_w = mcu_w;
+  uint32_t win_h = mcu_h;
+
+  // record the current time so we can measure how long it takes to draw an image.
+  uint32_t drawTime = millis();
+
+  // save the coordinate of the right and bottom edges to assist image cropping to the screen size.
+  max_x += xpos;
+  max_y += ypos;
+
+  // Fetch data from the file, decode and display.
+  while (JpegDec.read()) {    // While there is more data in the file
+    pImg = JpegDec.pImage ;   // Decode a MCU (Minimum Coding Unit, typically a 8x8 or 16x16 pixel block)
+
+    // Calculate coordinates of top left corner of current MCU.
+    int mcu_x = JpegDec.MCUx * mcu_w + xpos;
+    int mcu_y = JpegDec.MCUy * mcu_h + ypos;
+
+    // check if the image block size needs to be changed for the right edge.
+    if (mcu_x + mcu_w <= max_x) win_w = mcu_w;
+    else win_w = min_w;
+
+    // check if the image block size needs to be changed for the bottom edge.
+    if (mcu_y + mcu_h <= max_y) win_h = mcu_h;
+    else win_h = min_h;
+
+    // copy pixels into a contiguous block.
+    if (win_w != mcu_w) {
+      uint16_t *cImg;
+      int p = 0;
+      cImg = pImg + win_w;
+      for (int h = 1; h < win_h; h++) {
+        p += mcu_w;
+        for (int w = 0; w < win_w; w++) {
+          *cImg = *(pImg + w + p);
+          cImg++;
+        }
+      }
+    }
+
+    // calculate how many pixels must be drawn.
+    uint32_t mcu_pixels = win_w * win_h;
+
+    // draw image MCU block only if it will fit on the screen.
+    if (( mcu_x + win_w ) <= tft.width() && ( mcu_y + win_h ) <= tft.height())
+      tft.pushImage(mcu_x, mcu_y, win_w, win_h, pImg);
+    else if ((mcu_y + win_h) >= tft.height())
+      // Image has run off bottom of screen so abort decoding.
+      JpegDec.abort(); 
+  }
+
+  tft.setSwapBytes(swapBytes);
+
+  // These lines are for sketch testing only.
+  showTime(millis() - drawTime); 
+}
+//________________________________________________________________________________ 
+
+
+
+//________________________________________________________________________________ jpegInfo()
+// Print image information to the serial port (optional).
+// JpegDec.decodeFile(...) or JpegDec.decodeArray(...) must be called before this info is available!
+
+void jpegInfo() {
+  // Print information extracted from the JPEG file.
+  Serial.println("JPEG image info");
+  Serial.println("===============");
+  Serial.print("Width      :");
+  Serial.println(JpegDec.width);
+  Serial.print("Height     :");
+  Serial.println(JpegDec.height);
+  Serial.print("Components :");
+  Serial.println(JpegDec.comps);
+  Serial.print("MCU / row  :");
+  Serial.println(JpegDec.MCUSPerRow);
+  Serial.print("MCU / col  :");
+  Serial.println(JpegDec.MCUSPerCol);
+  Serial.print("Scan type  :");
+  Serial.println(JpegDec.scanType);
+  Serial.print("MCU width  :");
+  Serial.println(JpegDec.MCUWidth);
+  Serial.print("MCU height :");
+  Serial.println(JpegDec.MCUHeight);
+  Serial.println("===============");
+  Serial.println("");
+}
+//________________________________________________________________________________ 
+
+
+
+//________________________________________________________________________________ showTime()
+// Show the execution time (optional).
+//
+// WARNING: for UNO/AVR legacy reasons printing text to the screen with the Mega might not work for
+// sketch sizes greater than ~70KBytes because 16-bit address pointers are used in some libraries.
+//
+// The Due will work fine with the HX8357_Due library.
+
+void showTime(uint32_t msTime) {
+  //tft.setCursor(0, 0);
+  //tft.setTextFont(1);
+  //tft.setTextSize(2);
+  //tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  //tft.print(F(" JPEG drawn in "));
+  //tft.print(msTime);
+  //tft.println(F(" ms "));
+  Serial.print(F(" JPEG drawn in "));
+  Serial.print(msTime);
+  Serial.println(F(" ms "));
+}
+//________________________________________________________________________________ 
+
+
+
+//________________________________________________________________________________ VOID SETUP()
+void setup() {
+  // put your setup code here, to run once:
+
+  Serial.begin(115200);
+  Serial.println();
+  delay(3000);
+
+  // Set all chip selects high to avoid bus contention during initialisation of each peripheral.
+  digitalWrite(13, HIGH); // Touch controller chip select (if used).
+  digitalWrite(15, HIGH); // TFT screen chip select.
+  digitalWrite( 5, HIGH); // SD card chips select, must use GPIO 5 (ESP32 SS).
+
+  tft.begin();
+  
+  //---------------------------------------- 
+  // If it fails to access or detect the SD card, then the process of accessing or detecting the SD card will be repeated 3 times.
+  //
+  // I created this condition because in my case or on my TFT LCD module,
+  // if the process of accessing or detecting the SD card is only done once, then it fails to detect.
+  // But if it is done 2 or 3 times, then accessing or detecting the SD card is successful.
+  //
+  // If after 3 times the process of accessing or detecting the SD card is repeated,
+  // but still fails to access or detect the SD card,
+  // then check your installation cable or try using another TFT LCD module (if you have more than one TFT LCD module).
+  for (byte i = 0; i < 3; i++) {
+    if (!SD.begin(5, tft.getSPIinstance())) {
+      Serial.println("Card Mount Failed !\nTry again.\nPlease wait.");
+      if (i == 2) {
+        Serial.println("Card Mount Failed !\nCheck your SD card, SD card module, and wiring.");
+        while(1);
+      }
+    } else {
+      break;
+    }
+    delay(1000);
+  }
+  //---------------------------------------- 
+  
+  uint8_t cardType = SD.cardType();
+
+  if (cardType == CARD_NONE) {
+    Serial.println("No SD card attached");
+    return;
+  }
+
+  Serial.print("SD Card Type: ");
+  if (cardType == CARD_MMC) {
+    Serial.println("MMC");
+  } else if (cardType == CARD_SD) {
+    Serial.println("SDSC");
+  } else if (cardType == CARD_SDHC) {
+    Serial.println("SDHC");
+  } else {
+    Serial.println("UNKNOWN");
+  }
+
+  uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+  Serial.printf("SD Card Size: %lluMB\n", cardSize);
+
+  Serial.println("initialisation done.");
+
+  delay(2000);
+}
+//________________________________________________________________________________ 
+
+
+
+//________________________________________________________________________________ VOID LOOP()
+void loop() {
+  // put your main code here, to run repeatedly:
+
+  //---------------------------------------- Draws or displays an image (image file "EagleEye.jpg") to the TFT LCD.
+  tft.setRotation(0);  //--> portrait.
+  tft.fillScreen(random(0xFFFF));
+
+  // Draws or displays an image in the center position of the screen.
+  //
+  // The image (EagleEye.jpg) is 300 x 300 pixels so we do some sums to position image in the middle of the screen!.
+  // Doing this by reading the image width and height from the jpeg info is left as an exercise!.
+  
+  x = (tft.width()  - 300) / 2 - 1;
+  if (x < 0) x = 0;
+  y = (tft.height() - 300) / 2 - 1;
+  if (y < 0) y = 0;
+
+  // This draws a jpeg pulled off the SD Card.
+  drawSdJpeg("/EagleEye.jpg", x, y);
+  delay(3000);
+  //---------------------------------------- 
+
+  //---------------------------------------- Draws or displays an image (image file "IMG_01.jpg") to the TFT LCD.
+  tft.setRotation(1);  // landscape.
+  tft.fillScreen(random(0xFFFF));
+  drawSdJpeg("/IMG_01.jpg", 0, 0);
+  delay(3000);
+  //---------------------------------------- 
+
+  //---------------------------------------- Draws or displays an image (image file "IMG_02.jpg") to the TFT LCD.
+  tft.setRotation(1);  // landscape.
+  tft.fillScreen(random(0xFFFF));
+  drawSdJpeg("/IMG_02.jpg", 0, 0);
+  delay(3000);
+  //---------------------------------------- 
+
+  //---------------------------------------- Draws or displays an image (image file "IMG_02.jpg") to the TFT LCD.
+  tft.setRotation(0);  // portrait.
+  tft.fillScreen(random(0xFFFF));
+
+  // Draws or displays an image in the center position of the screen.
+  // Resolution of image file "IMG_02.jpg": 320 x 240 pixels.
+  x = (tft.width()  - 320) / 2 - 1;
+  if (x < 0) x = 0;
+  y = (tft.height() - 240) / 2 - 1;
+  if (y < 0) y = 0;
+  drawSdJpeg("/IMG_02.jpg", x, y);
+  delay(3000);
+  //---------------------------------------- 
+
+  //---------------------------------------- Draws or displays an image (image file "IMG_03.jpg") to the TFT LCD.
+  tft.setRotation(1);  // landscape.
+  tft.fillScreen(random(0xFFFF));
+  drawSdJpeg("/IMG_03.jpg", 0, 0);
+  delay(3000);
+  //---------------------------------------- 
+
+  //---------------------------------------- Draws or displays an image (image file "arduino.jpg") to the TFT LCD.
+  tft.setRotation(0);  // portrait.
+  tft.fillScreen(random(0xFFFF));
+  drawSdJpeg("/arduino.jpg", 0, 0);
+  delay(3000);
+  //---------------------------------------- 
+
+  //---------------------------------------- Draws or displays an image (image file "arduino.jpg") to the TFT LCD.
+  tft.setRotation(0);  // portrait.
+  tft.fillScreen(random(0xFFFF));
+
+  // Draws or displays an image in the center position of the screen.
+  // Resolution of image file "IMG_02.jpg": 160 x 128 pixels.
+  x = (tft.width()  - 160) / 2 - 1;
+  if (x < 0) x = 0;
+  y = (tft.height() - 128) / 2 - 1;
+  if (y < 0) y = 0;
+  drawSdJpeg("/arduino.jpg", x, y);
+  delay(3000);
+  //---------------------------------------- 
+
+  //---------------------------------------- Draws or displays an image (image file "arduino.jpg") to the TFT LCD.
+  tft.setRotation(1);  // landscape.
+  tft.fillScreen(random(0xFFFF));
+
+  // Draws or displays an image in the center position of the screen.
+  x = (tft.width()  - 160) / 2 - 1;
+  if (x < 0) x = 0;
+  y = (tft.height() - 128) / 2 - 1;
+  if (y < 0) y = 0;
+  drawSdJpeg("/arduino.jpg", x, y);
+  delay(3000);
+  //---------------------------------------- 
+
+  //---------------------------------------- Draws or displays an image (image file "IMG_04.jpg") to the TFT LCD.
+  tft.setRotation(1);  // landscape.
+  tft.fillScreen(random(0xFFFF));
+  drawSdJpeg("/IMG_04.jpg", 0, 0);
+  delay(3000);
+  //---------------------------------------- 
+}
+//________________________________________________________________________________ 
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
+
+
+
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 03_Touchscreen
+//##############################################################################################
+//# This sketch or program code is based on the example file "On_Off_Button.ino"               #
+//# Arduino IDE (File -> Examples -> TFT_eSPI -> Generic -> On_Off_Button).                    #
+//# I made a little modification of the program code "On_Off_Button".                          #
+//# If this program code does not work properly, please try the original code (On_Off_Button). #
+//##############################################################################################
+
+//---------------------------------------- Including Libraries.
+#include "FS.h"  //--> // Calibration data is stored in SPIFFS so we need to include it.
+#include <SPI.h>
+#include <TFT_eSPI.h> // Hardware-specific library
+//---------------------------------------- 
+
+//---------------------------------------- 
+// This is the file name used to store the touch coordinate calibration data.
+// Change the name to start a new calibration.
+#define CALIBRATION_FILE "/TouchCalData3"
+//---------------------------------------- 
+
+//---------------------------------------- 
+// Set REPEAT_CAL to true instead of false to run calibration again, otherwise it will only be done once.
+// Repeat calibration if you change the screen rotation.
+//
+// Set REPEAT_CAL to true if you want to recalibrate. Then Upload the program code.
+// If you have finished recalibrating, Set REPEAT_CAL to false,
+// then upload the program code (so that the calibration is not repeated).
+#define REPEAT_CAL false
+//---------------------------------------- 
+
+// Comment out to stop drawing black spots.
+#define BLACK_SPOT
+
+// Switch position and size.
+#define FRAME_X 100
+#define FRAME_Y 64
+#define FRAME_W 120
+#define FRAME_H 50
+
+// Red zone size.
+#define REDBUTTON_X FRAME_X
+#define REDBUTTON_Y FRAME_Y
+#define REDBUTTON_W (FRAME_W/2)
+#define REDBUTTON_H FRAME_H
+
+// Green zone size.
+#define GREENBUTTON_X (REDBUTTON_X + REDBUTTON_W)
+#define GREENBUTTON_Y FRAME_Y
+#define GREENBUTTON_W (FRAME_W/2)
+#define GREENBUTTON_H FRAME_H
+
+// Defines the LED PIN.
+#define my_LED 27
+
+bool SwitchOn = false;
+
+// Invoke custom library.
+TFT_eSPI tft = TFT_eSPI();
+
+
+
+//________________________________________________________________________________ touch_calibrate()
+void touch_calibrate() {
+  uint16_t calData[5];
+  uint8_t calDataOK = 0;
+
+  // check file system exists.
+  if (!SPIFFS.begin()) {
+    Serial.println("Formatting file system");
+    SPIFFS.format();
+    SPIFFS.begin();
+  }
+
+  // check if calibration file exists and size is correct.
+  if (SPIFFS.exists(CALIBRATION_FILE)) {
+    if (REPEAT_CAL) {
+      // Delete if we want to re-calibrate.
+      SPIFFS.remove(CALIBRATION_FILE);
+    }
+    else {
+      File f = SPIFFS.open(CALIBRATION_FILE, "r");
+      if (f) {
+        if (f.readBytes((char *)calData, 14) == 14)
+          calDataOK = 1;
+        f.close();
+      }
+    }
+  }
+
+  if (calDataOK && !REPEAT_CAL) {
+    // calibration data valid.
+    tft.setTouch(calData);
+  } else {
+    // data not valid so recalibrate.
+    tft.fillScreen(TFT_BLACK);
+    tft.setCursor(20, 0);
+    tft.setTextFont(2);
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+
+    tft.println("Touch corners as indicated");
+
+    tft.setTextFont(1);
+    tft.println();
+
+    if (REPEAT_CAL) {
+      tft.setTextColor(TFT_RED, TFT_BLACK);
+      tft.println("Set REPEAT_CAL to false to stop this running again!");
+    }
+
+    tft.calibrateTouch(calData, TFT_MAGENTA, TFT_BLACK, 15);
+
+    tft.setTextColor(TFT_GREEN, TFT_BLACK);
+    tft.println("Calibration complete!");
+
+    // store data.
+    File f = SPIFFS.open(CALIBRATION_FILE, "w");
+    if (f) {
+      f.write((const unsigned char *)calData, 14);
+      f.close();
+    }
+  }
+}
+//________________________________________________________________________________ 
+
+
+
+//________________________________________________________________________________ drawFrame()
+void drawFrame() {
+  tft.drawRect(FRAME_X, FRAME_Y, FRAME_W, FRAME_H, TFT_BLACK);
+}
+//________________________________________________________________________________ 
+
+
+
+//________________________________________________________________________________ redBtn()
+// Draw a red button.
+void redBtn() {
+  tft.fillRect(REDBUTTON_X, REDBUTTON_Y, REDBUTTON_W, REDBUTTON_H, TFT_RED);
+  tft.fillRect(GREENBUTTON_X, GREENBUTTON_Y, GREENBUTTON_W, GREENBUTTON_H, TFT_DARKGREY);
+  drawFrame();
+  tft.setTextColor(TFT_WHITE);
+  tft.setTextSize(2);
+  tft.setTextDatum(MC_DATUM);
+  tft.drawString("ON", GREENBUTTON_X + (GREENBUTTON_W / 2), GREENBUTTON_Y + (GREENBUTTON_H / 2));
+  SwitchOn = false;
+}
+//________________________________________________________________________________ 
+
+
+
+//________________________________________________________________________________ greenBtn()
+// Draw a green button.
+void greenBtn() {
+  tft.fillRect(GREENBUTTON_X, GREENBUTTON_Y, GREENBUTTON_W, GREENBUTTON_H, TFT_GREEN);
+  tft.fillRect(REDBUTTON_X, REDBUTTON_Y, REDBUTTON_W, REDBUTTON_H, TFT_DARKGREY);
+  drawFrame();
+  tft.setTextColor(TFT_WHITE);
+  tft.setTextSize(2);
+  tft.setTextDatum(MC_DATUM);
+  tft.drawString("OFF", REDBUTTON_X + (REDBUTTON_W / 2) + 1, REDBUTTON_Y + (REDBUTTON_H / 2));
+  SwitchOn = true;
+}
+//________________________________________________________________________________ 
+
+
+
+//________________________________________________________________________________ VOID SETUP()
+void setup() {
+  // put your setup code here, to run once:
+
+  pinMode(26, OUTPUT);
+  digitalWrite(26, LOW);
+
+  Serial.begin(115200);
+  Serial.println();
+  delay(3000);
+
+  pinMode(my_LED, OUTPUT);
+  digitalWrite(my_LED, LOW);
+  
+  tft.init();
+
+  // Set the rotation before we calibrate.
+  tft.setRotation(1);
+
+  // call screen calibration.
+  touch_calibrate();
+
+  // clear screen.
+  tft.fillScreen(TFT_BLUE);
+
+  // Draw button (this example does not use library Button class).
+  redBtn();
+}
+//________________________________________________________________________________ 
+
+
+
+//________________________________________________________________________________ VOID LOOP()
+void loop() {
+  // put your main code here, to run repeatedly:
+
+  uint16_t x, y;
+
+  // See if there's any touch data for us.
+  if (tft.getTouch(&x, &y)) {
+    // Draw a block spot to show where touch was calculated to be.
+    #ifdef BLACK_SPOT
+      tft.fillCircle(x, y, 2, TFT_BLACK);
+    #endif
+    
+    if (SwitchOn) {
+      if ((x > REDBUTTON_X) && (x < (REDBUTTON_X + REDBUTTON_W))) {
+        if ((y > REDBUTTON_Y) && (y <= (REDBUTTON_Y + REDBUTTON_H))) {
+          Serial.println("Red btn hit");
+          // Turn off the LED.
+          digitalWrite(my_LED, LOW);
+          redBtn();
+        }
+      }
+    }
+    else {  //--> Record is off (SwitchOn == false).
+      if ((x > GREENBUTTON_X) && (x < (GREENBUTTON_X + GREENBUTTON_W))) {
+        if ((y > GREENBUTTON_Y) && (y <= (GREENBUTTON_Y + GREENBUTTON_H))) {
+          Serial.println("Green btn hit");
+          // Turn on the LED.
+          digitalWrite(my_LED, HIGH);
+          greenBtn();
+        }
+      }
+    }
+
+    Serial.println(SwitchOn);
+  }
+}
+//________________________________________________________________________________ 
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
