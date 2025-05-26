@@ -8,3 +8,5 @@ a este como sigue:
 #include <User_Setup.h>
 
 Para las conexiones seguir la imagen adjunta.
+
+La libreria incluye varios ejemplos de uso
