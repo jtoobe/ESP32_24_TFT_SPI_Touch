@@ -25,3 +25,7 @@ https://github.com/ImpulseAdventure/GUIslice/wiki
 Un ejemplo del uso de GUISlicer esta en:
 
 https://github.com/jtoobe/FSUIPC_to_Mqtt/tree/main/ESP32
+
+Una buena explicacion del uso de GUISlicer:
+
+https://blog.csdn.net/zgj_online/article/details/104992395    (Esta en chino traducir a español ;-) )
