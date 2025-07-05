@@ -21,3 +21,7 @@ La libreria incluye varios ejemplos de uso
 Un desarrollo interesante es una GUI para diseñar las pantallas y su libreria
 
 https://github.com/ImpulseAdventure/GUIslice/wiki
+
+Un ejemplo del uso de GUISlicer esta en:
+
+https://github.com/jtoobe/FSUIPC_to_Mqtt/tree/main/ESP32
